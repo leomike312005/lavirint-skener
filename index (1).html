@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lavirint Skener</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f0f0f; color: #fff;
+  height: 100vh; display: flex; flex-direction: column;
+  overflow: hidden; user-select: none;
+}
+.setup-screen {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px; padding: 40px;
+}
+.setup-screen h1 { font-size: 24px; color: #fff; letter-spacing: 2px; }
+.setup-screen p { font-size: 14px; color: #666; text-align: center; }
+.shop-buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 8px; }
+.shop-btn {
+  background: #1a1a1a; border: 2px solid #333; border-radius: 12px;
+  color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 2px;
+  padding: 16px 28px; cursor: pointer; transition: all 0.15s;
+}
+.shop-btn:active { background: #222; border-color: #4ade80; transform: scale(0.97); }
+
+.app-screen { flex: 1; display: flex; flex-direction: column; display: none; }
+.header {
+  padding: 16px 20px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid #222;
+}
+.shop-badge {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  padding: 6px 14px; font-size: 22px; font-weight: 700;
+  letter-spacing: 2px; color: #fff; cursor: pointer;
+}
+.header-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.counter-num { font-size: 28px; font-weight: 700; color: #fff; line-height: 1; }
+.counter-label { font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+.sync-status { font-size: 11px; color: #4ade80; }
+.sync-status.pending { color: #fbbf24; }
+.sync-status.err { color: #f87171; }
+
+.scan-area {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 16px; gap: 16px;
+  overflow: hidden;
+}
+.last-code {
+  font-size: 26px; font-weight: 700; color: #4ade80;
+  font-family: "Courier New", monospace; letter-spacing: 2px;
+  min-height: 34px; text-align: center;
+}
+.scan-list-wrap { width: 100%; max-width: 400px; }
+.scan-list-title { font-size: 10px; color: #333; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; text-align: center; }
+#scanList { display: flex; flex-direction: column; gap: 5px; }
+.scan-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  transition: background 0.4s;
+}
+.scan-item.pending { background: #1a1a1a; }
+.scan-item.ok      { background: #0d2918; }
+.scan-item.warn    { background: #1f1700; }
+.scan-item.err     { background: #1f0a0a; }
+.scan-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transition: background 0.4s; }
+.scan-dot.pending { background: #555; }
+.scan-dot.ok      { background: #4ade80; }
+.scan-dot.warn    { background: #fbbf24; }
+.scan-dot.err     { background: #f87171; }
+.scan-code { font-family: "Courier New", monospace; color: #ccc; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-time { color: #444; font-size: 11px; flex-shrink: 0; }
+
+.input-area { padding: 14px 20px 28px; border-top: 1px solid #222; }
+#scanInput {
+  width: 100%; background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
+  padding: 16px; font-size: 16px; color: #fff;
+  outline: none; caret-color: #4ade80;
+  transition: border-color 0.1s; -webkit-appearance: none;
+}
+#scanInput:focus { border-color: #4ade80; }
+#scanInput::placeholder { color: #333; }
+</style>
+</head>
+<body>
+
+<!-- Ekran za izbor prodavnice -->
+<div class="setup-screen" id="setupScreen">
+  <h1>LAVIRINT</h1>
+  <p>Izaberi prodavnicu</p>
+  <div class="shop-buttons">
+    <button class="shop-btn" onclick="selectShop('SB')">SB</button>
+    <button class="shop-btn" onclick="selectShop('VB')">VB</button>
+    <button class="shop-btn" onclick="selectShop('VB2')">VB2</button>
+    <button class="shop-btn" onclick="selectShop('RE')">RE</button>
+  </div>
+</div>
+
+<!-- Glavni ekran skeniranja -->
+<div class="app-screen" id="appScreen">
+  <div class="header">
+    <div class="shop-badge" id="shopBadge" onclick="goBack()">—</div>
+    <div class="header-right">
+      <div class="counter-num" id="counter">0</div>
+      <div class="counter-label">skenirano</div>
+      <div class="sync-status" id="syncStatus">&#10003; ok</div>
+    </div>
+  </div>
+  <div class="scan-area">
+    <div class="last-code" id="lastCode"></div>
+    <div class="scan-list-wrap">
+      <div class="scan-list-title">Poslednja skeniranja</div>
+      <div id="scanList"></div>
+    </div>
+  </div>
+  <div class="input-area">
+    <input type="text" id="scanInput"
+      placeholder="Skeniraj..."
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+    />
+  </div>
+</div>
+
+<script>
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwmRaV6Uk6yGsWSGP830PDaINGDtYx8wvdbvoO3MbQa6rc_c0iGJViohhrjbE0smI/exec';
+
+var SHOP = '';
+var scanCount = 0;
+var queue = [];
+var isSyncing = false;
+var syncTimer = null;
+var itemMap = {};
+
+var inp = document.getElementById('scanInput');
+var lastCodeEl = document.getElementById('lastCode');
+var scanList = document.getElementById('scanList');
+var counterEl = document.getElementById('counter');
+var syncEl = document.getElementById('syncStatus');
+var shopBadge = document.getElementById('shopBadge');
+var setupScreen = document.getElementById('setupScreen');
+var appScreen = document.getElementById('appScreen');
+
+// Proveri da li je prodavnica vec izabrana (pamti u sessionStorage)
+window.addEventListener('load', function() {
+  var saved = sessionStorage.getItem('lavirint_shop');
+  if (saved) {
+    selectShop(saved);
+  }
+});
+
+function selectShop(shop) {
+  SHOP = shop;
+  sessionStorage.setItem('lavirint_shop', shop);
+  shopBadge.textContent = shop;
+  setupScreen.style.display = 'none';
+  appScreen.style.display = 'flex';
+  appScreen.style.flexDirection = 'column';
+  // Reset
+  scanCount = 0;
+  counterEl.textContent = '0';
+  lastCodeEl.textContent = '';
+  scanList.innerHTML = '';
+  queue = [];
+  setTimeout(function() { inp.focus(); }, 300);
+}
+
+function goBack() {
+  sessionStorage.removeItem('lavirint_shop');
+  appScreen.style.display = 'none';
+  setupScreen.style.display = 'flex';
+  SHOP = '';
+}
+
+// Fokus
+document.addEventListener('click', function(e) {
+  if (SHOP && e.target !== shopBadge) {
+    setTimeout(function() { inp.focus(); }, 50);
+  }
+});
+
+// Enter handler
+inp.addEventListener('keydown', function(e) {
+  if (e.keyCode === 13 || e.key === 'Enter') {
+    var code = inp.value.trim();
+    inp.value = '';
+    if (code) handleScan(code);
+    e.preventDefault();
+  }
+});
+
+// Fallback za DataWedge koji ponekad ne salje Enter kao keydown
+var _lastVal = '';
+inp.addEventListener('input', function() {
+  var val = inp.value;
+  if (val === _lastVal) return;
+  _lastVal = val;
+  clearTimeout(inp._ft);
+  if (val.trim()) {
+    inp._ft = setTimeout(function() {
+      var code = inp.value.trim();
+      if (code) {
+        inp.value = '';
+        _lastVal = '';
+        handleScan(code);
+      }
+    }, 300);
+  }
+});
+
+function handleScan(code) {
+  scanCount++;
+  counterEl.textContent = scanCount;
+  if (navigator.vibrate) navigator.vibrate(30);
+  lastCodeEl.textContent = code;
+
+  var id = 'i' + Date.now() + Math.random().toString(36).substr(2, 4);
+  addToList(id, code, 'pending');
+  queue.push({ id: id, code: code });
+  setSyncStatus('pending', '&#8987; ' + queue.length + ' ceka');
+
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(flushQueue, 800);
+}
+
+function flushQueue() {
+  if (isSyncing || queue.length === 0) return;
+  isSyncing = true;
+
+  var batch = queue.slice();
+  queue = [];
+
+  var codes = batch.map(function(x) { return x.code; }).join('|');
+  var url = SCRIPT_URL + '?action=upisi&shop=' + encodeURIComponent(SHOP) + '&codes=' + encodeURIComponent(codes);
+
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      isSyncing = false;
+      if (res.success) {
+        res.results.forEach(function(r, i) {
+          updateItem(batch[i].id, r.known ? 'ok' : 'warn');
+        });
+        setSyncStatus('ok', '&#10003; ok');
+      } else {
+        batch.forEach(function(x) { updateItem(x.id, 'err'); });
+        retry(batch, res.error);
+      }
+      if (queue.length > 0) syncTimer = setTimeout(flushQueue, 200);
+    })
+    .catch(function(err) {
+      isSyncing = false;
+      batch.forEach(function(x) { updateItem(x.id, 'err'); });
+      retry(batch, 'greska veze');
+    });
+}
+
+function retry(batch, reason) {
+  setSyncStatus('err', '&#10005; ' + (reason || 'greska') + ', pokusavam...');
+  setTimeout(function() {
+    batch.forEach(function(x) { queue.unshift(x); });
+    flushQueue();
+  }, 3000);
+}
+
+function addToList(id, code, status) {
+  var now = new Date();
+  var time = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+  var el = document.createElement('div');
+  el.id = id;
+  el.className = 'scan-item ' + status;
+  el.innerHTML =
+    '<div class="scan-dot ' + status + '" id="d' + id + '"></div>' +
+    '<div class="scan-code">' + esc(code) + '</div>' +
+    '<div class="scan-time">' + time + '</div>';
+  scanList.insertBefore(el, scanList.firstChild);
+  while (scanList.children.length > 8) scanList.removeChild(scanList.lastChild);
+  itemMap[id] = el;
+}
+
+function updateItem(id, status) {
+  var el = itemMap[id];
+  if (!el) return;
+  el.className = 'scan-item ' + status;
+  var dot = document.getElementById('d' + id);
+  if (dot) dot.className = 'scan-dot ' + status;
+}
+
+function setSyncStatus(type, text) {
+  syncEl.className = 'sync-status' + (type === 'ok' ? '' : ' ' + type);
+  syncEl.innerHTML = text;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
