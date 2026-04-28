@@ -25,8 +25,7 @@ body {
   padding: 16px 28px; cursor: pointer; transition: all 0.15s;
 }
 .shop-btn:active { background: #222; border-color: #4ade80; transform: scale(0.97); }
-
-.app-screen { flex: 1; display: flex; flex-direction: column; display: none; }
+.app-screen { flex: 1; display: none; flex-direction: column; }
 .header {
   padding: 16px 20px 12px;
   display: flex; align-items: center; justify-content: space-between;
@@ -43,7 +42,6 @@ body {
 .sync-status { font-size: 11px; color: #4ade80; }
 .sync-status.pending { color: #fbbf24; }
 .sync-status.err { color: #f87171; }
-
 .scan-area {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; padding: 16px; gap: 16px;
@@ -73,7 +71,6 @@ body {
 .scan-dot.err     { background: #f87171; }
 .scan-code { font-family: "Courier New", monospace; color: #ccc; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scan-time { color: #444; font-size: 11px; flex-shrink: 0; }
-
 .input-area { padding: 14px 20px 28px; border-top: 1px solid #222; }
 #scanInput {
   width: 100%; background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
@@ -87,7 +84,6 @@ body {
 </head>
 <body>
 
-<!-- Ekran za izbor prodavnice -->
 <div class="setup-screen" id="setupScreen">
   <h1>LAVIRINT</h1>
   <p>Izaberi prodavnicu</p>
@@ -99,7 +95,6 @@ body {
   </div>
 </div>
 
-<!-- Glavni ekran skeniranja -->
 <div class="app-screen" id="appScreen">
   <div class="header">
     <div class="shop-badge" id="shopBadge" onclick="goBack()">—</div>
@@ -126,6 +121,7 @@ body {
 
 <script>
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwmRaV6Uk6yGsWSGP830PDaINGDtYx8wvdbvoO3MbQa6rc_c0iGJViohhrjbE0smI/exec';
+var ALLOWED_SHOPS = ['SB', 'VB', 'VB2', 'RE'];
 
 var SHOP = '';
 var scanCount = 0;
@@ -143,22 +139,28 @@ var shopBadge = document.getElementById('shopBadge');
 var setupScreen = document.getElementById('setupScreen');
 var appScreen = document.getElementById('appScreen');
 
-// Proveri da li je prodavnica vec izabrana (pamti u sessionStorage)
 window.addEventListener('load', function() {
-  var saved = sessionStorage.getItem('lavirint_shop');
-  if (saved) {
-    selectShop(saved);
+  // Proveri URL parametar ?shop=XX
+  var params = new URLSearchParams(window.location.search);
+  var shopParam = params.get('shop') ? params.get('shop').toUpperCase() : '';
+
+  if (shopParam && ALLOWED_SHOPS.indexOf(shopParam) !== -1) {
+    // Automatski uđi bez ekrana za izbor
+    selectShop(shopParam, true);
+  } else {
+    // Prikaži ekran za izbor
+    setupScreen.style.display = 'flex';
   }
 });
 
-function selectShop(shop) {
+function selectShop(shop, autoSelected) {
   SHOP = shop;
-  sessionStorage.setItem('lavirint_shop', shop);
   shopBadge.textContent = shop;
+  // Ako je auto-selected, sakrij back dugme (klik na badge nema smisla)
+  if (autoSelected) shopBadge.style.cursor = 'default';
   setupScreen.style.display = 'none';
   appScreen.style.display = 'flex';
   appScreen.style.flexDirection = 'column';
-  // Reset
   scanCount = 0;
   counterEl.textContent = '0';
   lastCodeEl.textContent = '';
@@ -168,20 +170,18 @@ function selectShop(shop) {
 }
 
 function goBack() {
-  sessionStorage.removeItem('lavirint_shop');
+  if (new URLSearchParams(window.location.search).get('shop')) return; // ne dozvoli back ako je auto
   appScreen.style.display = 'none';
   setupScreen.style.display = 'flex';
   SHOP = '';
 }
 
-// Fokus
 document.addEventListener('click', function(e) {
   if (SHOP && e.target !== shopBadge) {
     setTimeout(function() { inp.focus(); }, 50);
   }
 });
 
-// Enter handler
 inp.addEventListener('keydown', function(e) {
   if (e.keyCode === 13 || e.key === 'Enter') {
     var code = inp.value.trim();
@@ -191,7 +191,6 @@ inp.addEventListener('keydown', function(e) {
   }
 });
 
-// Fallback za DataWedge koji ponekad ne salje Enter kao keydown
 var _lastVal = '';
 inp.addEventListener('input', function() {
   var val = inp.value;
@@ -215,12 +214,10 @@ function handleScan(code) {
   counterEl.textContent = scanCount;
   if (navigator.vibrate) navigator.vibrate(30);
   lastCodeEl.textContent = code;
-
   var id = 'i' + Date.now() + Math.random().toString(36).substr(2, 4);
   addToList(id, code, 'pending');
   queue.push({ id: id, code: code });
   setSyncStatus('pending', '&#8987; ' + queue.length + ' ceka');
-
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(flushQueue, 800);
 }
@@ -228,13 +225,10 @@ function handleScan(code) {
 function flushQueue() {
   if (isSyncing || queue.length === 0) return;
   isSyncing = true;
-
   var batch = queue.slice();
   queue = [];
-
   var codes = batch.map(function(x) { return x.code; }).join('|');
   var url = SCRIPT_URL + '?action=upisi&shop=' + encodeURIComponent(SHOP) + '&codes=' + encodeURIComponent(codes);
-
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(res) {
@@ -250,7 +244,7 @@ function flushQueue() {
       }
       if (queue.length > 0) syncTimer = setTimeout(flushQueue, 200);
     })
-    .catch(function(err) {
+    .catch(function() {
       isSyncing = false;
       batch.forEach(function(x) { updateItem(x.id, 'err'); });
       retry(batch, 'greska veze');
