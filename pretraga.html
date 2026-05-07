@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lavirint — Pretraga</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f0f0f; color: #fff;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #222;
+  display: flex; align-items: center; gap: 14px;
+  position: sticky; top: 0; background: #0f0f0f; z-index: 10;
+}
+.logo { font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #fff; flex-shrink: 0; }
+.search-wrap { flex: 1; position: relative; }
+#searchInput {
+  width: 100%; background: #1a1a1a; border: 2px solid #333; border-radius: 10px;
+  padding: 12px 16px; font-size: 15px; color: #fff;
+  outline: none; caret-color: #4ade80; -webkit-appearance: none;
+  transition: border-color 0.15s;
+}
+#searchInput:focus { border-color: #4ade80; }
+#searchInput::placeholder { color: #444; }
+.clear-btn {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: #555; font-size: 16px;
+  cursor: pointer; display: none; padding: 4px;
+}
+.status-bar {
+  padding: 10px 20px; font-size: 12px; color: #555;
+  border-bottom: 1px solid #111;
+}
+.results { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.card {
+  background: #141414; border: 1px solid #222; border-radius: 12px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.card-sifra {
+  font-family: "Courier New", monospace; font-size: 13px;
+  color: #4ade80; letter-spacing: 1px; font-weight: 700;
+}
+.card-cena { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; }
+.card-naziv { font-size: 15px; font-weight: 600; color: #fff; }
+.card-meta { font-size: 12px; color: #666; margin-top: 2px; }
+.card-opis { font-size: 12px; color: #555; font-style: italic; }
+.stanja {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.stanje-pill {
+  display: flex; align-items: center; gap: 5px;
+  background: #1a1a1a; border-radius: 6px;
+  padding: 5px 10px; font-size: 12px;
+}
+.stanje-label { color: #666; font-weight: 600; }
+.stanje-num { font-weight: 700; }
+.stanje-num.ok   { color: #4ade80; }
+.stanje-num.low  { color: #fbbf24; }
+.stanje-num.zero { color: #444; }
+.empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: #333; padding: 60px 20px; text-align: center;
+}
+.empty-icon { font-size: 40px; }
+.empty-text { font-size: 14px; }
+.loading {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 12px; color: #444;
+}
+.spinner-lg {
+  width: 32px; height: 32px;
+  border: 3px solid #222; border-top-color: #4ade80;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.highlight { color: #4ade80; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">LAVIRINT</div>
+  <div class="search-wrap">
+    <input type="text" id="searchInput" placeholder="Pretraži šifru, naziv, boju..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <button class="clear-btn" id="clearBtn">✕</button>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">Učitavam podatke...</div>
+
+<div class="loading" id="loadingEl">
+  <div class="spinner-lg"></div>
+  <div>Učitavam katalog...</div>
+</div>
+
+<div class="results" id="results" style="display:none;"></div>
+
+<script>
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwmRaV6Uk6yGsWSGP830PDaINGDtYx8wvdbvoO3MbQa6rc_c0iGJViohhrjbE0smI/exec';
+
+var allItems = [];
+var searchInput = document.getElementById('searchInput');
+var clearBtn = document.getElementById('clearBtn');
+var statusBar = document.getElementById('statusBar');
+var resultsEl = document.getElementById('results');
+var loadingEl = document.getElementById('loadingEl');
+
+// Učitaj podatke
+fetch(SCRIPT_URL + '?action=pretraga')
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    loadingEl.style.display = 'none';
+    resultsEl.style.display = 'flex';
+    if (res.success) {
+      allItems = res.items;
+      statusBar.textContent = allItems.length + ' artikala učitano';
+      renderResults('');
+    } else {
+      statusBar.textContent = 'Greška: ' + res.error;
+    }
+  })
+  .catch(function(err) {
+    loadingEl.style.display = 'none';
+    statusBar.textContent = 'Greška veze — osveži stranicu';
+  });
+
+searchInput.addEventListener('input', function() {
+  var q = searchInput.value.trim();
+  clearBtn.style.display = q ? 'block' : 'none';
+  renderResults(q);
+});
+
+clearBtn.addEventListener('click', function() {
+  searchInput.value = '';
+  clearBtn.style.display = 'none';
+  searchInput.focus();
+  renderResults('');
+});
+
+function renderResults(q) {
+  var query = q.toLowerCase();
+  var filtered = allItems;
+
+  if (query) {
+    filtered = allItems.filter(function(item) {
+      return (
+        item.sifra.toLowerCase().indexOf(query) !== -1 ||
+        String(item.naziv).toLowerCase().indexOf(query) !== -1 ||
+        String(item.boja).toLowerCase().indexOf(query) !== -1
+      );
+    });
+  }
+
+  if (filtered.length === 0) {
+    resultsEl.innerHTML =
+      '<div class="empty">' +
+      '<div class="empty-icon">◌</div>' +
+      '<div class="empty-text">' + (query ? 'Nema rezultata za "' + esc(q) + '"' : 'Unesi šifru ili naziv') + '</div>' +
+      '</div>';
+    statusBar.textContent = query ? '0 rezultata' : allItems.length + ' artikala učitano';
+    return;
+  }
+
+  statusBar.textContent = filtered.length + (query ? ' rezultata za "' + q + '"' : ' artikala');
+
+  resultsEl.innerHTML = filtered.map(function(item) {
+    var ukupno = (item.SB || 0) + (item.VB || 0) + (item.VB2 || 0) + (item.RE || 0);
+    var sifraHl = highlight(esc(item.sifra), query);
+    var nazivHl = highlight(esc(String(item.naziv)), query);
+    var bojaHl  = highlight(esc(String(item.boja)), query);
+
+    return '<div class="card">' +
+      '<div class="card-top">' +
+        '<div>' +
+          '<div class="card-sifra">' + sifraHl + '</div>' +
+          '<div class="card-naziv">' + nazivHl + '</div>' +
+          '<div class="card-meta">' + bojaHl + (item.velicina ? ' · ' + esc(String(item.velicina)) : '') + '</div>' +
+          (item.opis ? '<div class="card-opis">' + esc(String(item.opis)) + '</div>' : '') +
+        '</div>' +
+        '<div class="card-cena">' + formatCena(item.cena) + '</div>' +
+      '</div>' +
+      '<div class="stanja">' +
+        stanjeHtml('SB',  item.SB) +
+        stanjeHtml('VB',  item.VB) +
+        stanjeHtml('VB2', item.VB2) +
+        stanjeHtml('RE',  item.RE) +
+        '<div class="stanje-pill">' +
+          '<span class="stanje-label">SVE</span>' +
+          '<span class="stanje-num ' + numClass(ukupno) + '">' + ukupno + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function stanjeHtml(label, num) {
+  var n = num || 0;
+  return '<div class="stanje-pill">' +
+    '<span class="stanje-label">' + label + '</span>' +
+    '<span class="stanje-num ' + numClass(n) + '">' + n + '</span>' +
+    '</div>';
+}
+
+function numClass(n) {
+  if (n > 1) return 'ok';
+  if (n === 1) return 'low';
+  return 'zero';
+}
+
+function formatCena(val) {
+  if (!val && val !== 0) return '';
+  return 'Din. ' + Number(val).toLocaleString('sr-RS');
+}
+
+function highlight(text, query) {
+  if (!query) return text;
+  var idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return text.substring(0, idx) +
+    '<span class="highlight">' + text.substring(idx, idx + query.length) + '</span>' +
+    text.substring(idx + query.length);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
